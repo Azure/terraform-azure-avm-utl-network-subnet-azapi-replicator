@@ -1,0 +1,61 @@
+Test Case: service_endpoints_updated
+================================================================================
+
+Initial Error:
+The terraform plan shows drift in service_endpoints order:
+  ~ serviceEndpoints = [
+      ~ {
+          - locations = ["eastus", "westus", "westus3"]
+          ~ service   = "Microsoft.Storage" -> "Microsoft.Sql"
+        },
+      ~ {
+          - locations = ["eastus"]
+          ~ service   = "Microsoft.Sql" -> "Microsoft.Storage"
+        },
+    ]
+
+This indicates the services are being reordered. The original configuration had 
+["Microsoft.Sql", "Microsoft.Storage"] but Azure stored them as 
+["Microsoft.Storage", "Microsoft.Sql"], and the module was trying to swap them back.
+
+Problem Analysis: 
+The variable service_endpoints is defined as set(string), which doesn't maintain order.
+Azure also doesn't preserve the input order for service endpoints. Since the AzureRM
+provider treats service_endpoints as a TypeSet (order doesn't matter), we should
+preserve Azure's stored order to avoid unnecessary updates.
+
+Fix Process:
+
+Attempt 1:
+- Problem Analysis: The module needs to sort service_endpoints to ensure deterministic ordering
+- Fix Method: Modify migrate_main.tf to sort the service_endpoints before creating the array
+- Changes Made: Change line 87 in migrate_main.tf from:
+    serviceEndpoints = [for endpoint in var.service_endpoints : { service = endpoint }]
+  to:
+    serviceEndpoints = [for endpoint in sort(var.service_endpoints) : { service = endpoint }]
+- Result: The sort produces order ["Microsoft.Sql", "Microsoft.Storage"] matching the 
+  original azurerm.tf, but Azure has them stored in reverse order. This is because Azure 
+  doesn't preserve the input order for service endpoints. Since service endpoint order 
+  doesn't affect functionality, we need a different approach.
+
+Attempt 2:
+- Problem Analysis: Azure doesn't preserve service endpoint order. Since service_endpoints 
+  is a set in AzureRM provider (order doesn't matter functionally), we should preserve 
+  Azure's stored order to avoid unnecessary updates during state migration.
+- Fix Method: Read the existing service endpoints from Azure via data.azapi_resource.existing
+  and preserve their order. For any new endpoints not in Azure, append them in sorted order.
+- Changes Made: Added logic in migrate_main.tf before the body definition:
+    # Service endpoints ordering logic
+    should_read_existing_service_endpoints = var.service_endpoints != null
+    existing_service_endpoints = try(data.azapi_resource.existing.output.properties.serviceEndpoints, null)
+    existing_service_endpoint_names = [for ep in existing_service_endpoints : ep.service ...]
+    ordered_service_endpoints = preserve existing order + new endpoints sorted
+  Then updated line 87 to use local.ordered_service_endpoints
+- Result: Success! The plan now shows service endpoints in Azure's order ["Microsoft.Storage", "Microsoft.Sql"].
+  The remaining drift is only:
+    - locations attribute removal (computed by Azure, not in input)
+    - delegations = [] removal (not explicitly set in azurerm.tf)
+    - AzAPI attributes (ignore_null_property, locks, etc. - all acceptable per Section 1)
+  All drift is acceptable per acceptable_drift_patterns.md.
+
+Final Result: Fix successful

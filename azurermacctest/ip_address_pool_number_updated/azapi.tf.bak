@@ -1,0 +1,45 @@
+module "replicator" {
+  source = "../.."
+
+  name               = "acctestsubnet${random_integer.number.result}"
+  virtual_network_id = azurerm_virtual_network.test.id
+  ip_address_pool = {
+    id                     = azurerm_network_manager_ipam_pool.test.id
+    number_of_ip_addresses = "50"
+  }
+  enable_telemetry = false
+}
+
+resource "azapi_resource" "this" {
+  type                             = module.replicator.azapi_header.type
+  name                             = module.replicator.azapi_header.name
+  location                         = module.replicator.azapi_header.location
+  parent_id                        = module.replicator.azapi_header.parent_id
+  tags                             = module.replicator.azapi_header.tags
+  body                             = module.replicator.body
+  schema_validation_enabled        = module.replicator.azapi_header.schema_validation_enabled
+  ignore_null_property             = module.replicator.azapi_header.ignore_null_property
+  sensitive_body                   = module.replicator.sensitive_body
+  sensitive_body_version           = module.replicator.sensitive_body_version
+  replace_triggers_external_values = module.replicator.replace_triggers_external_values
+  locks                            = module.replicator.locks
+  retry                            = module.replicator.retry
+
+  dynamic "identity" {
+    for_each = try(module.replicator.azapi_header.identity != null, false) ? [module.replicator.azapi_header.identity] : []
+    content {
+      type         = identity.value.type
+      identity_ids = try(identity.value.identity_ids, null)
+    }
+  }
+
+  dynamic "timeouts" {
+    for_each = module.replicator.timeouts != null ? [module.replicator.timeouts] : []
+    content {
+      create = timeouts.value.create
+      delete = timeouts.value.delete
+      read   = timeouts.value.read
+      update = timeouts.value.update
+    }
+  }
+}
