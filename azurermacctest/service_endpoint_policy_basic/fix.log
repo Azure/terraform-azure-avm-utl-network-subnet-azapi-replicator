@@ -1,0 +1,22 @@
+Test Case: service_endpoint_policy_basic
+================================================================================
+
+Initial Error:
+Error: Invalid function argument
+  on ..\..\migrate_main.tf line 98, in locals:
+  98:   ) : sort(var.service_endpoints)
+     ├────────────────
+     │ while calling sort(list)
+     │ var.service_endpoints is null
+
+Invalid value for "list" parameter: argument must not be null.
+
+Fix Process:
+
+Attempt 1:
+- Problem Analysis: The module's migrate_main.tf line 98 tries to call sort() on var.service_endpoints when it's null. The azapi.tf doesn't pass service_endpoints, so it defaults to null according to variables.tf.
+- Fix Method: Modified line 98 in migrate_main.tf to handle null case by adding a null check: (var.service_endpoints != null ? sort(var.service_endpoints) : [])
+- Changes Made: Changed migrate_main.tf line 98 from "sort(var.service_endpoints)" to "(var.service_endpoints != null ? sort(var.service_endpoints) : [])"
+- Result: Success - Plan now works and shows only acceptable drift patterns
+
+Final Result: Fix successful

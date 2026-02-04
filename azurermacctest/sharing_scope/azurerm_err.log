@@ -1,0 +1,33 @@
+Test Case: sharing_scope
+================================================================================
+
+Step: Step 2 - Baseline Validation (terraform apply)
+Status: FAILED - Test case marked as INVALID
+
+Error Message:
+Error: creating Subnet (Subscription: "f7a632a5-49db-4c5e-9828-cd62cb753971"
+Resource Group Name: "acctestRG-169225"
+Virtual Network Name: "acctestvirtnet169225"
+Subnet Name: "internal"): performing CreateOrUpdate: unexpected status 400 (400 Bad Request) with error: SubscriptionNotRegisteredForFeature: Subscription f7a632a5-49db-4c5e-9828-cd62cb753971 is not registered for feature Microsoft.Network/EnableSharedVNet required to carry out the requested operation.
+
+Root Cause Analysis:
+The test case attempts to create a subnet with `sharing_scope = "Tenant"`, which requires the Azure subscription to be registered for the preview feature "Microsoft.Network/EnableSharedVNet". This is a subscription-level feature gate that is not enabled on the current test subscription.
+
+The sharing_scope parameter enables shared virtual network functionality, which is currently in preview and requires explicit feature registration at the subscription level. This cannot be resolved by modifying the Terraform configuration.
+
+Failed Command:
+terraform apply -auto-approve -input=false
+
+Conclusion:
+This test case cannot be executed in the current environment because:
+1. The subscription is not registered for the required Azure preview feature
+2. Feature registration is outside the scope of infrastructure-as-code testing
+3. The baseline AzureRM configuration itself is invalid for this subscription
+
+This is a valid test case configuration but invalid for the current test environment. The test case should be skipped or retried once the subscription has the required feature enabled.
+
+Required Action:
+Register the subscription for the preview feature using:
+az feature register --namespace Microsoft.Network --name EnableSharedVNet
+
+Note: Feature registration can take several hours to complete.
